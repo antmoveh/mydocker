@@ -1,17 +1,23 @@
 package container
 
 import (
+	"github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
 	"syscall"
 )
 
-func NewParentProcess(tty bool, command string) *exec.Cmd {
+func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
 
-	args := []string{"init", command}
-	cmd := exec.Command("/proc/self/exe", args...)
+	readPipe, writePipe, err := NewPipe()
+	if err != nil {
+		logrus.Error("New pipe error %v", err)
+		return nil, nil
+	}
+
+	cmd := exec.Command("/proc/self/exe", "init")
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS|syscall.CLONE_NEWPID|syscall.CLONE_NEWNS|syscall.CLONE_NEWNET|syscall.CLONE_NEWIPC,
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWNET | syscall.CLONE_NEWIPC,
 	}
 
 	if tty {
@@ -19,5 +25,14 @@ func NewParentProcess(tty bool, command string) *exec.Cmd {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	return cmd
+	cmd.ExtraFiles = []*os.File{readPipe}
+	return cmd, writePipe
+}
+
+func NewPipe() (*os.File, *os.File, error) {
+	read, write, err := os.Pipe()
+	if err != nil {
+		return nil, nil, err
+	}
+	return read, write, nil
 }

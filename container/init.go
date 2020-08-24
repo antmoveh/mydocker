@@ -17,9 +17,9 @@ func RunContainerInitProcess() error {
 		return fmt.Errorf("Run container get user comand")
 	}
 
-	// setUpMount()
-	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
-	syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), "")
+	setUpMount()
+	//defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
+	//syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), "")
 
 	path, err := exec.LookPath(cmdArray[0])
 	if err != nil {
@@ -56,7 +56,10 @@ func setUpMount() {
 		return
 	}
 	logrus.Infof("Current location is %s", pwd)
-	pivotRoot(pwd)
+	err = pivotRoot(pwd)
+	if err != nil {
+		logrus.Errorf("PivotRoot fail %v", err)
+	}
 
 	//mount proc
 	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
@@ -74,19 +77,30 @@ func pivotRoot(root string) error {
 		return fmt.Errorf("Mount rootfs to itself error: %v", err)
 	}
 	// 创建 rootfs/.pivot_root 存储 old_root
-	pivotDir := filepath.Join(root, ".pivot_root")
-	if err := os.Mkdir(pivotDir, 0777); err != nil {
+	pivotDir := filepath.Join(root, "/.pivot_root")
+	if _, err := os.Stat(pivotDir); err == nil {
+		os.Remove(pivotDir)
+	}
+	if err := os.MkdirAll(pivotDir, 0777); err != nil {
 		return err
 	}
 	// pivot_root 到新的rootfs, 现在老的 old_root 是挂载在rootfs/.pivot_root
 	// 挂载点现在依然可以在mount命令中看到
+	logrus.Infof("root %s", root)
+	logrus.Infof("pivotdir %s", pivotDir)
+	if err := syscall.Exec("unshare", []string{"-m"}, os.Environ()); err != nil {
+		logrus.Errorf(err.Error())
+	}
 	if err := syscall.PivotRoot(root, pivotDir); err != nil {
 		return fmt.Errorf("pivot_root %v", err)
 	}
+
 	// 修改当前的工作目录到根目录
+	logrus.Infof("change chdir /")
 	if err := syscall.Chdir("/"); err != nil {
 		return fmt.Errorf("chdir / %v", err)
 	}
+	logrus.Infof("change chdir end")
 
 	pivotDir = filepath.Join("/", ".pivot_root")
 	// umount rootfs/.pivot_root

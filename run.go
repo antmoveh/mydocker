@@ -8,6 +8,7 @@ import (
 	"mydocker/cgroups"
 	"mydocker/cgroups/subsystems"
 	"mydocker/container"
+	"mydocker/network"
 	"os"
 	"strconv"
 	"strings"
@@ -31,7 +32,8 @@ type ContainerInfo struct {
 	Status      string `json:"status"`     //容器的状态
 }
 
-func Run(tty bool, comArray []string, res *subsystems.ResourceConfig, volume string, containerName string, imageName string, envSlice []string) {
+func Run(tty bool, comArray []string, res *subsystems.ResourceConfig, volume string, containerName string,
+	imageName string, envSlice []string, nw string, portmapping []string) {
 	containerID := randStringBytes(10)
 	if containerName == "" {
 		containerName = containerID
@@ -57,6 +59,22 @@ func Run(tty bool, comArray []string, res *subsystems.ResourceConfig, volume str
 
 	cgroupManager.Set(res)
 	cgroupManager.Apply(parent.Process.Pid)
+
+	if nw != "" {
+		// config container network
+		network.Init()
+		containerInfo := &container.ContainerInfo{
+			Id:          containerID,
+			Pid:         strconv.Itoa(parent.Process.Pid),
+			Name:        containerName,
+			PortMapping: portmapping,
+		}
+		if err := network.Connect(nw, containerInfo); err != nil {
+			logrus.Errorf("Error Connect Network %v", err)
+			return
+		}
+	}
+
 	sendInitCommand(comArray, writePipe)
 	if tty {
 		parent.Wait()

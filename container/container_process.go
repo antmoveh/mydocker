@@ -1,6 +1,7 @@
 package container
 
 import (
+	"fmt"
 	"github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ var (
 	Exit                string = "exited"
 	DefaultInfoLocation string = "/var/run/mydocker/%s/"
 	ConfigName          string = "config.json"
+	ContainerLogFile    string = "container.log"
 )
 
 type ContainerInfo struct {
@@ -42,6 +44,20 @@ func NewParentProcess(tty bool, volume string) (*exec.Cmd, *os.File) {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+	} else {
+		dirURL := fmt.Sprintf(DefaultInfoLocation, ConfigName)
+		if err := os.MkdirAll(dirURL, 0622); err != nil {
+			logrus.Errorf("NewParentProcess mkdir %serror %v", dirURL, err)
+			return nil, nil
+		}
+		stdLogFilePath := dirURL + ContainerLogFile
+		stdLogFile, err := os.Create(stdLogFilePath)
+		if err != nil {
+			logrus.Errorf("NewParentProcess create file %s error %v", stdLogFilePath, err)
+			return nil, nil
+		}
+		cmd.Stdout = stdLogFile
+
 	}
 	cmd.ExtraFiles = []*os.File{readPipe}
 	//mntURL := "/root/mnt/"

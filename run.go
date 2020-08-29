@@ -31,8 +31,13 @@ type ContainerInfo struct {
 	Status      string `json:"status"`     //容器的状态
 }
 
-func Run(tty bool, comArray []string, res *subsystems.ResourceConfig, volume string, containerName string) {
-	parent, writePipe := container.NewParentProcess(tty, volume)
+func Run(tty bool, comArray []string, res *subsystems.ResourceConfig, volume string, containerName string, imageName string) {
+	containerID := randStringBytes(10)
+	if containerName == "" {
+		containerName = containerID
+	}
+
+	parent, writePipe := container.NewParentProcess(tty, containerName, volume, imageName)
 	if parent == nil {
 		logrus.Errorf("New parent process error")
 		return
